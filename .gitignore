@@ -3,6 +3,8 @@ processed_data/
 interspeech_data_models/
 acl_sample_data_models/
 my_outputs/
+colab_icin_mm_vap/
+fine_tune_trained_models/
 
 .DS_Store
 .vscode/

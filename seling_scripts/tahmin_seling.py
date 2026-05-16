@@ -35,11 +35,12 @@ def fix_config_device(d, target_device):
 def test_model_on_sample(file_id): # <-- Fonksiyona parametre eklendi
     # 1. Dosya Yolları
     sample_data_dir = "processed_data/"
-    output_predictions_dir = "my_outputs/"
+    output_predictions_dir = "fine_tune_trained_models/"
     os.makedirs(output_predictions_dir, exist_ok=True)
 
     # DİKKAT: Projedeki eğitilmiş modelin yolunu buraya yazmalısın
-    model_weights_path = "acl_sample_data_models/sample_trained_models/VAP_candor/20240822_105427_fold_0_epoch_10" 
+    # model_weights_path = "acl_sample_data_models/sample_trained_models/VAP_candor/20240822_105427_fold_0_epoch_10" 
+    model_weights_path = "fine_tune_trained_models/20260509_120654_fold_0_epoch_8.pt" 
 
     # 2. Mac M1 (MPS) Kontrolü
     if torch.backends.mps.is_available():
@@ -51,7 +52,8 @@ def test_model_on_sample(file_id): # <-- Fonksiyona parametre eklendi
 
     # 3. Modeli Yükleme
     print("Model mimarisi kuruluyor...")
-    cfg_path = "acl_sample_data_models/sample_trained_models/VAP_candor/20240822_105427_params.yaml"
+    # cfg_path = "acl_sample_data_models/sample_trained_models/VAP_candor/20240822_105427_params.yaml"
+    cfg_path = "fine_tune_trained_models/20260508_104500_params.yaml" # <-- Config dosyasının yolu (eğitilmiş modelin config'iyle aynı olmalı)
     if not os.path.exists(cfg_path):
         raise FileNotFoundError(f"Config dosyası bulunamadı: {cfg_path}")
         
