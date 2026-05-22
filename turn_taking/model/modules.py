@@ -184,7 +184,7 @@ class MultiHeadAttentionAlibi(MultiHeadAttention):
 
         # Add causality mask to alibi  (1, num_heads, T, T)
         alibi = alibi.unsqueeze(-2) + mask
-        alibi.requires_grad_(False)  # this should not be trained
+        alibi = alibi.detach()  # pytorch compatibility fix
         return alibi
 
     def mask_scores(self, qk: torch.Tensor, mask=None):

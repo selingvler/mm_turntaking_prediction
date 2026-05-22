@@ -249,7 +249,7 @@ class AudioVisualDataset(AudioDataset):
         self.video_directory = video_directory
         self.video_format = video_format
         self.channel_hash = pd.read_pickle(channelmaps)
-        self.fps=30
+        self.fps=16
 
 
     def __getitem__(self, idx):
@@ -300,7 +300,7 @@ class ValidationAudioVisualDataset(ValidationAudioDataset):
         self.id = os.path.basename(self.audio_file).split('.')[0]
         ch = self.channelmap[self.channelmap.id==self.id]
         self.channelmap = {"L": ch["L"].item(), "R": ch["R"].item()}
-        self.fps=30
+        self.fps=16
 
 
     def __getitem__(self, index):
@@ -317,9 +317,14 @@ class ValidationAudioVisualDataset(ValidationAudioDataset):
 
             df = pd.read_pickle(video_file)
             frames = df.iloc[int(start*self.fps):int(end*self.fps), :]
+
+            # If the requested validation window runs past the available video,
+            # fall back to the last available chunk instead of returning empty frames.
+            if len(frames) == 0:
+                print(ret['id'], "empty video slice; using last available frames")
+                frames = df.iloc[max(0, len(df) - 600):len(df), :]
+
             frames = torch.Tensor(frames.values)
-            if frames.shape[0]==0:
-                print(ret['id'], frames.shape)
             if frames_lr is None:
                 frames_lr = frames
             else:
@@ -327,8 +332,24 @@ class ValidationAudioVisualDataset(ValidationAudioDataset):
             
         # frames = torch.stack(frames_lr, dim=-1)
 
+        # Resize validation video window to model video sequence length.
+        # EarlyVAFusion config expects video sequence_len=600 and upsamples it to audio sequence_len=1000.
+        target_len = 600
+        if frames_lr.shape[0] != target_len:
+            # [T, D, 2] -> [1, D*2, T]
+            t, d, c = frames_lr.shape
+            x = frames_lr.permute(1, 2, 0).reshape(1, d * c, t)
+            x = torch.nn.functional.interpolate(
+                x,
+                size=target_len,
+                mode="linear",
+                align_corners=False,
+            )
+            # [1, D*2, target] -> [target, D, 2]
+            frames_lr = x.reshape(d, c, target_len).permute(2, 0, 1)
+
         # time last
-        ret['channel_ids'] = np.array([self.channelmap["L"], self.channelmap["R"]])
+        ret['channel_ids'] = torch.tensor([0, 1], dtype=torch.long)
         ret['frames'] = frames_lr
 
         return ret
