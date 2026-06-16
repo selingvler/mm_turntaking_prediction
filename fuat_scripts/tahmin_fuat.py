@@ -117,39 +117,58 @@ def _safe_value(x):
     if hasattr(x, "item"):
         return float(x.item())
     return float(x)
-
+_last_human_vad = 0.0
+_silence_count = 0
 
 def live_decision(vad_frame, p_future_frame, p_bc_frame, vad_threshold=0.5):
-    # Speaker activity from VAD probabilities
-    vad_left = _safe_value(vad_frame[0])
-    vad_right = _safe_value(vad_frame[1])
+    global _last_human_vad, _silence_count
 
-    if max(vad_left, vad_right) < vad_threshold:
-        # Silence region, default to hold unless backchannel is very strong
-        bc_score = max(_safe_value(p_bc_frame[0]), _safe_value(p_bc_frame[1]))
-        if bc_score > 0.55:
-            return "backchannel", bc_score
-        return "hold", 1.0 - max(vad_left, vad_right)
+    vad_left = _safe_value(vad_frame[0])     # human
+    vad_right = _safe_value(vad_frame[1])    # robot
 
-    # Current speaker is the most active channel.
-    current = 0 if vad_left >= vad_right else 1
-    other = 1 - current
+    p_human = _safe_value(p_future_frame[0])
+    p_robot = _safe_value(p_future_frame[1])
 
-    shift_score = _safe_value(p_future_frame[other])
-    hold_score = _safe_value(p_future_frame[current])
+    bc_robot = _safe_value(p_bc_frame[1])
 
-    # Backchannel score represents short listener response likelihood.
-    # Use the channel opposite to current active speaker.
-    bc_score = _safe_value(p_bc_frame[other])
+    was_speaking = _last_human_vad > 0.35
+    now_silent = vad_left < 0.50
 
-    decision_scores = {
-        "shift": shift_score,
-        "hold": hold_score,
-        "backchannel": bc_score,
-    }
-    decision = max(decision_scores, key=decision_scores.get)
-    confidence = decision_scores[decision]
-    return decision, confidence
+    if now_silent:
+        _silence_count += 1
+    else:
+        _silence_count = 0
+
+    _last_human_vad = vad_left
+
+    # Robot zaten konuşuyorsa bekle
+    if vad_right > 0.35:
+        return "hold", vad_right
+
+    # İnsan konuşmayı yeni bitirdiyse robot sırayı alabilir
+    if was_speaking and _silence_count >= 1:
+        return "shift", 0.65
+
+    # İnsan konuşuyorsa robot beklesin
+    if vad_left >= vad_threshold:
+
+        if bc_robot > 0.015:
+            return "backchannel", bc_robot
+
+        if p_robot > 0.30 and vad_left < 0.85:
+            return "shift", max(p_robot, 0.55)
+
+        return "hold", p_human
+
+    # Başlangıç sessizliğinde robot hemen atlamasın
+    if _silence_count < 2:
+        return "hold", 1.0 - vad_left
+
+    # Uzun sessizlikte, robot tarafı makul görünüyorsa konuşabilir
+    if p_robot > 0.30:
+        return "shift", max(p_robot, 0.55)
+
+    return "hold", 1.0 - vad_left
 
 
 def stream_live_predictions(
